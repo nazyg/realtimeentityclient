@@ -1,47 +1,56 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GameLogic : MonoBehaviour
 {
-    float durationUntilNextBalloon;
-    Sprite circleTexture;
+    readonly Dictionary<int, GameObject> balloonsByID = new Dictionary<int, GameObject>();
+    Sprite circleSprite;
 
     void Start()
     {
         NetworkClientProcessing.SetGameLogic(this);
     }
 
-    void Update()
+    // The server decides where and when balloons appear; the client only shows them.
+    public void SpawnBalloon(int balloonID, Vector2 screenPercent)
     {
-        durationUntilNextBalloon -= Time.deltaTime;
+        if (balloonsByID.ContainsKey(balloonID))
+            return;
 
-        if (durationUntilNextBalloon < 0)
-        {
-            durationUntilNextBalloon = 1f;
+        if (circleSprite == null)
+            circleSprite = Resources.Load<Sprite>("Circle");
 
-            float screenPositionXPercent = Random.Range(0.0f, 1.0f);
-            float screenPositionYPercent = Random.Range(0.0f, 1.0f);
-            Vector2 screenPosition = new Vector2(screenPositionXPercent * (float)Screen.width, screenPositionYPercent * (float)Screen.height);
-            SpawnNewBalloon(screenPosition);
-        }
+        GameObject balloon = new GameObject("Balloon " + balloonID);
+        balloon.AddComponent<SpriteRenderer>().sprite = circleSprite;
+        balloon.AddComponent<CircleClick>().BalloonID = balloonID;
+        balloon.AddComponent<CircleCollider2D>();
+        balloon.transform.position = ScreenPercentToWorldPosition(screenPercent);
+
+        balloonsByID.Add(balloonID, balloon);
     }
 
-    public void SpawnNewBalloon(Vector2 screenPosition)
+    public void PopBalloon(int balloonID)
     {
-        if (circleTexture == null)
-            circleTexture = Resources.Load<Sprite>("Circle");
+        if (!balloonsByID.TryGetValue(balloonID, out GameObject balloon))
+            return;
 
-        GameObject balloon = new GameObject("Balloon");
+        Destroy(balloon);
+        balloonsByID.Remove(balloonID);
+    }
 
-        balloon.AddComponent<SpriteRenderer>();
-        balloon.GetComponent<SpriteRenderer>().sprite = circleTexture;
-        balloon.AddComponent<CircleClick>();
-        balloon.AddComponent<CircleCollider2D>();
+    // Used when the connection to the server is lost: the balloons on screen may no longer match the server.
+    public void RemoveAllBalloons()
+    {
+        foreach (GameObject balloon in balloonsByID.Values)
+            Destroy(balloon);
+        balloonsByID.Clear();
+    }
 
-        Vector3 pos = Camera.main.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, 0));
-        pos.z = 0;
-        balloon.transform.position = pos;
-        //go.transform.position = Camera.main.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, -Camera.main.transform.position.z));
+    static Vector3 ScreenPercentToWorldPosition(Vector2 screenPercent)
+    {
+        Vector3 screenPosition = new Vector3(screenPercent.x * Screen.width, screenPercent.y * Screen.height, 0);
+        Vector3 worldPosition = Camera.main.ScreenToWorldPoint(screenPosition);
+        worldPosition.z = 0;
+        return worldPosition;
     }
 }

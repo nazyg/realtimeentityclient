@@ -11,7 +11,7 @@ public class NetworkClient : MonoBehaviour
     NetworkPipeline reliableAndInOrderPipeline;
     NetworkPipeline nonReliableNotInOrderedPipeline;
     const ushort NetworkPort = 9001;
-    const string IPAddress = "192.168.2.41";
+    const string IPAddress = "127.0.0.1";
 
     void Start()
     {
@@ -30,7 +30,16 @@ public class NetworkClient : MonoBehaviour
 
     public void OnDestroy()
     {
-        networkConnection.Disconnect(networkDriver);
+        if (!networkDriver.IsCreated)
+            return;
+
+        if (networkConnection.IsCreated)
+        {
+            networkConnection.Disconnect(networkDriver);
+            networkDriver.ScheduleFlushSend(default).Complete();
+            networkDriver.ScheduleUpdate().Complete();
+        }
+
         networkConnection = default(NetworkConnection);
         networkDriver.Dispose();
     }
@@ -120,7 +129,7 @@ public class NetworkClient : MonoBehaviour
         reliableAndInOrderPipeline = networkDriver.CreatePipeline(typeof(FragmentationPipelineStage), typeof(ReliableSequencedPipelineStage));
         nonReliableNotInOrderedPipeline = networkDriver.CreatePipeline(typeof(FragmentationPipelineStage));
         networkConnection = default(NetworkConnection);
-        NetworkEndPoint endpoint = NetworkEndPoint.Parse(IPAddress, NetworkPort, NetworkFamily.Ipv4);
+        NetworkEndpoint endpoint = NetworkEndpoint.Parse(IPAddress, NetworkPort, NetworkFamily.Ipv4);
         networkConnection = networkDriver.Connect(endpoint);
     }
 
